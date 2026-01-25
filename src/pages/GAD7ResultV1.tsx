@@ -1,12 +1,38 @@
-import { useLocation } from "react-router-dom"
+import { useEffect, useState } from "react"
+import { useLocation, useParams } from "react-router-dom"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
-import { Check, Sparkles, Brain, Zap, Shield, FileText, Lock } from "lucide-react"
+import { Check, Sparkles, Brain, Zap, Shield, FileText, Lock, Loader2 } from "lucide-react"
+import { getAssessment } from "@/lib/api"
 
-export default function DetailedResultV1() {
+export default function GAD7ResultV1() {
     const location = useLocation()
-    const { score = 0 } = location.state || {}
+    const { assessmentId } = useParams()
+
+    const [score, setScore] = useState<number>(location.state?.score || 0)
+    const [freeReport, setFreeReport] = useState<any>(location.state?.freeReport || null)
+    const [isLoading, setIsLoading] = useState(!location.state)
+    const [error, setError] = useState<string | null>(null)
+
+    useEffect(() => {
+        if (!location.state && assessmentId) {
+            const fetchAssessment = async () => {
+                try {
+                    setIsLoading(true)
+                    const data = await getAssessment(assessmentId)
+                    setScore(data.scoreResult.overall.score)
+                    setFreeReport(data.freeReport)
+                } catch (err) {
+                    console.error("Failed to fetch assessment:", err)
+                    setError("Could not find the assessment results. Please try again or take the test again.")
+                } finally {
+                    setIsLoading(false)
+                }
+            }
+            fetchAssessment()
+        }
+    }, [assessmentId, location.state])
 
     const getAnxietyLevel = (score: number) => {
         if (score <= 4) return { label: "Minimal anxiety", color: "text-[#10B981]", hex: "#10B981", bg: "bg-[#10B981]", desc: "Your responses suggest that anxiety is currently at a minimal level." };
@@ -16,6 +42,36 @@ export default function DetailedResultV1() {
     }
 
     const level = getAnxietyLevel(score)
+    const summary = freeReport?.summary || level.desc
+
+    if (isLoading) {
+        return (
+            <main className="min-h-screen bg-white">
+                <Navbar />
+                <div className="flex flex-col items-center justify-center min-h-[60vh]">
+                    <Loader2 className="w-10 h-10 animate-spin text-[#2D7A78] mb-4" />
+                    <p className="text-slate-500 font-medium">Loading your profile...</p>
+                </div>
+                <Footer />
+            </main>
+        )
+    }
+
+    if (error) {
+        return (
+            <main className="min-h-screen bg-white">
+                <Navbar />
+                <div className="flex flex-col items-center justify-center min-h-[60vh] max-w-md mx-auto px-4 text-center">
+                    <h2 className="text-2xl font-bold text-slate-800 mb-4">Results Not Found</h2>
+                    <p className="text-slate-600 mb-8">{error}</p>
+                    <Button onClick={() => window.location.href = "/gad-7"}>
+                        Back to Assessments
+                    </Button>
+                </div>
+                <Footer />
+            </main>
+        )
+    }
 
     return (
         <main className="min-h-screen bg-white">
@@ -61,7 +117,7 @@ export default function DetailedResultV1() {
                             {level.label}
                         </div>
                         <p className="text-[#4B5563] text-lg leading-relaxed mb-6">
-                            {level.desc}
+                            {summary}
                         </p>
                         <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs font-bold uppercase tracking-wider text-[#9CA3AF]">
                             <div className="flex items-center gap-2">
@@ -145,7 +201,6 @@ export default function DetailedResultV1() {
                     </div>
                 </div>
 
-                <button className="mt-12 text-[#9CA3AF] text-sm hover:underline">Continue with my basic result</button>
             </div>
 
             <Footer />

@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom"
 import { Check } from "lucide-react"
 
-export default function ThankYouPage() {
+export default function GAD7ThankYou() {
     return (
         <main className="min-h-screen bg-[#FDFDFD] flex flex-col">
             {/* Centered Assessment Header */}

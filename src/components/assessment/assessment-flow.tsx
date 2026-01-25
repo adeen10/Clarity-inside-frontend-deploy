@@ -1,53 +1,103 @@
 "use client"
 
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 import { AssessmentProgress } from "./assessment-progress"
 import { OptionCard } from "./option-card"
 import { MidPointScreen } from "./mid-point-screen"
-import { ArrowLeft } from "lucide-react"
-import { QUESTIONS } from "@/lib/questions"
+import { ArrowLeft, Loader2 } from "lucide-react"
+import { Question } from "@/lib/questions"
+import { getOrCreateVisitor } from "@/lib/visitor"
+import { submitAssessment } from "@/lib/api"
+import { useToast } from "@/hooks/use-toast"
 
-export function AssessmentFlow() {
+interface AssessmentFlowProps {
+  questions: Question[]
+  testType: string
+  basePath: string // e.g., "/gad-7" or "/adhd"
+  midpointStep?: number // Optional: step index to show midpoint screen
+  midpointTitle?: string
+  midpointDescription?: string
+}
+
+export function AssessmentFlow({
+  questions,
+  testType,
+  basePath,
+  midpointStep,
+  midpointTitle,
+  midpointDescription
+}: AssessmentFlowProps) {
   const [currentStep, setCurrentStep] = useState(0)
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [showMidPoint, setShowMidPoint] = useState(false)
+  const [isTransitioning, setIsTransitioning] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const navigate = useNavigate()
+  const { assessmentId } = useParams()
+  const { toast } = useToast()
 
-  const totalSteps = QUESTIONS.length
-  const currentQuestion = QUESTIONS[currentStep]
+  const totalSteps = questions.length
+  const currentQuestion = questions[currentStep]
 
   const handleSelect = (option: string) => {
+    if (isTransitioning || isSubmitting) return
+
     const newAnswers = { ...answers, [currentQuestion.id]: option }
     setAnswers(newAnswers)
+    setIsTransitioning(true)
 
     setTimeout(() => {
-      if (currentStep === 6) {
+      setIsTransitioning(false)
+      if (midpointStep !== undefined && currentStep === midpointStep && !showMidPoint) {
         setShowMidPoint(true)
       } else if (currentStep < totalSteps - 1) {
         setCurrentStep((prev) => prev + 1)
       } else {
-        // Quiz Complete
-        // Calculate GAD-7 Score (first 7 questions)
-        let gad7Score = 0
-        QUESTIONS.slice(0, 7).forEach((q) => {
-          const ans = newAnswers[q.id]
-          const idx = q.options.indexOf(ans)
-          if (idx >= 0) gad7Score += idx
-        })
-
-        // Calculate Extended Score if needed, or just pass all answers
-        // For now, we'll pass the GAD-7 score and the full answers object
-        navigate("/detailed-result", {
-          state: {
-            score: gad7Score,
-            answers: newAnswers,
-            totalQuestions: totalSteps
-          }
-        })
+        // Quiz Complete - Submit to backend
+        handleSubmitAssessment(newAnswers)
       }
     }, 300)
+  }
+
+  const handleSubmitAssessment = async (finalAnswers: Record<number, string>) => {
+    setIsSubmitting(true)
+    try {
+      const { visitorId, variant } = getOrCreateVisitor()
+
+      const response = await submitAssessment({
+        visitorId,
+        variant,
+        testType,
+        answers: finalAnswers,
+      })
+
+      // Navigate to result page with server response
+      const finalAssessmentId = response.assessmentId || assessmentId;
+      navigate(`${basePath}/${finalAssessmentId}/result`, {
+        state: {
+          assessmentId: response.assessmentId,
+          score: response.scoreResult.overall.score,
+          scoreResult: response.scoreResult,
+          freeReport: response.freeReport,
+          answers: finalAnswers,
+        }
+      })
+    } catch (error: any) {
+      console.error('Failed to submit assessment:', error)
+
+      const errorMessage = error.response?.data?.message || 'Failed to submit assessment. Please try again.'
+      const errorTitle = error.response?.data?.error || 'Submission Error'
+
+      toast({
+        title: errorTitle,
+        description: errorMessage,
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleBack = () => {
@@ -62,20 +112,26 @@ export function AssessmentFlow() {
 
   const handleContinueFromMidPoint = () => {
     setShowMidPoint(false)
-    setCurrentStep(7)
+    setCurrentStep((prev) => prev + 1)
   }
 
   if (showMidPoint) {
     return (
       <div className="max-w-[660px] mx-auto mt-[50px] px-4 flex flex-col min-h-[calc(100vh-130px)]">
-        <MidPointScreen onContinue={handleContinueFromMidPoint} completed={7} total={totalSteps} />
+        <MidPointScreen
+          onContinue={handleContinueFromMidPoint}
+          completed={currentStep + 1}
+          total={totalSteps}
+          title={midpointTitle}
+          description={midpointDescription}
+        />
 
         <div className="pt-8 border-t border-slate-100 flex items-center justify-between text-slate-500 text-sm">
           <button onClick={handleBack} className="flex items-center gap-2 hover:text-slate-800 transition-colors">
             <ArrowLeft className="w-4 h-4" />
             Back
           </button>
-          <span className="font-medium">{QUESTIONS[6].section}</span>
+          <span className="font-medium">{questions[currentStep].section}</span>
         </div>
       </div>
     )
@@ -88,7 +144,15 @@ export function AssessmentFlow() {
       <div className="flex-1 flex flex-col">
         <h2 className="text-3xl font-semibold text-slate-800 mb-[50px] text-balance">{currentQuestion.text}</h2>
 
-        <div className="flex flex-col gap-[30px] mb-12">
+        <div className="flex flex-col gap-[30px] mb-12 relative">
+          {isSubmitting && (
+            <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-10 flex items-center justify-center rounded-xl">
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+                <p className="text-sm font-medium text-slate-500 text-center">Finalizing your results...</p>
+              </div>
+            </div>
+          )}
           {currentQuestion.options.map((option) => (
             <OptionCard
               key={option}

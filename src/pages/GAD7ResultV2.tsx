@@ -1,21 +1,77 @@
-import { useLocation } from "react-router-dom"
+import { useEffect, useState } from "react"
+import { useLocation, useParams } from "react-router-dom"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
-import { Check } from "lucide-react"
+import { Check, Loader2 } from "lucide-react"
+import { getAssessment } from "@/lib/api"
 
-export default function DetailedResultV2() {
+export default function GAD7ResultV2() {
     const location = useLocation()
-    const { score = 0 } = location.state || {}
+    const { assessmentId } = useParams()
+
+    const [score, setScore] = useState<number>(location.state?.score || 0)
+    const [freeReport, setFreeReport] = useState<any>(location.state?.freeReport || null)
+    const [isLoading, setIsLoading] = useState(!location.state)
+    const [error, setError] = useState<string | null>(null)
+
+    useEffect(() => {
+        if (!location.state && assessmentId) {
+            const fetchAssessment = async () => {
+                try {
+                    setIsLoading(true)
+                    const data = await getAssessment(assessmentId)
+                    setScore(data.scoreResult.overall.score)
+                    setFreeReport(data.freeReport)
+                } catch (err) {
+                    console.error("Failed to fetch assessment:", err)
+                    setError("Could not find the assessment results. Please try again or take the test again.")
+                } finally {
+                    setIsLoading(false)
+                }
+            }
+            fetchAssessment()
+        }
+    }, [assessmentId, location.state])
 
     const getAnxietyLevel = (score: number) => {
         if (score <= 4) return { label: "Minimal anxiety", color: "text-[#10B981]", bg: "bg-[#10B981]", desc: "Your responses suggest minimal anxiety symptoms. However, occasional anxiety is normal and doesn't necessarily indicate a problem." };
         if (score <= 9) return { label: "Mild anxiety", color: "text-[#FBBF24]", bg: "bg-[#FBBF24]", desc: "Your responses suggest you may be experiencing mild anxiety." };
         if (score <= 14) return { label: "Moderate anxiety", color: "text-[#F59E0B]", bg: "bg-[#F59E0B]", desc: "Your responses suggest that anxiety may be having a noticeable impact on how you feel and function." };
-        return { label: "Severe anxiety", color: "text-[#EF4444]", bg: "bg-[#EF4444]", desc: "Your responses suggest that anxiety may be having a significant impact on your daily life." };
+        return { label: "Severe anxiety", color: "text-[#EF4444]", hex: "#EF4444", bg: "bg-[#EF4444]", desc: "Your responses suggest that anxiety may be having a significant impact on your daily life." };
     }
 
     const level = getAnxietyLevel(score)
+    const summary = freeReport?.summary || level.desc
+
+    if (isLoading) {
+        return (
+            <main className="min-h-screen bg-white">
+                <Navbar />
+                <div className="flex flex-col items-center justify-center min-h-[60vh]">
+                    <Loader2 className="w-10 h-10 animate-spin text-[#2D7A78] mb-4" />
+                    <p className="text-slate-500 font-medium">Loading your profile...</p>
+                </div>
+                <Footer />
+            </main>
+        )
+    }
+
+    if (error) {
+        return (
+            <main className="min-h-screen bg-white">
+                <Navbar />
+                <div className="flex flex-col items-center justify-center min-h-[60vh] max-w-md mx-auto px-4 text-center">
+                    <h2 className="text-2xl font-bold text-slate-800 mb-4">Results Not Found</h2>
+                    <p className="text-slate-600 mb-8">{error}</p>
+                    <Button onClick={() => window.location.href = "/gad-7"}>
+                        Back to Assessments
+                    </Button>
+                </div>
+                <Footer />
+            </main>
+        )
+    }
 
     return (
         <main className="min-h-screen bg-[#F8FAFB]">
@@ -61,7 +117,7 @@ export default function DetailedResultV2() {
                     </div>
 
                     <p className="text-[#4B5563] leading-relaxed max-w-lg mx-auto">
-                        {level.desc}
+                        {summary}
                     </p>
                 </div>
 
@@ -93,7 +149,6 @@ export default function DetailedResultV2() {
                     </Button>
                 </div>
 
-                <button className="text-[#9CA3AF] text-sm hover:underline">Continue with my basic result</button>
             </div>
 
             <Footer />

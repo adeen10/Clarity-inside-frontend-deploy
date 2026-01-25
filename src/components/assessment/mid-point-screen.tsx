@@ -6,10 +6,15 @@ interface MidPointScreenProps {
   onContinue: () => void
   completed: number
   total: number
+  title?: string
+  description?: string
 }
 
-export function MidPointScreen({ onContinue, completed, total }: MidPointScreenProps) {
+export function MidPointScreen({ onContinue, completed, total, title, description }: MidPointScreenProps) {
   const remaining = total - completed
+
+  const defaultTitle = "Thanks — we've recorded your initial responses."
+  const defaultDescription = "To give you a more meaningful result, we'll now ask a few more questions to understand your experience in more detail."
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center max-w-xl mx-auto py-12">
@@ -18,12 +23,11 @@ export function MidPointScreen({ onContinue, completed, total }: MidPointScreenP
       </div>
 
       <h2 className="text-3xl font-semibold text-slate-800 mb-6 leading-tight text-balance">
-        Thanks — we've recorded your core anxiety score.
+        {title || defaultTitle}
       </h2>
 
       <p className="text-slate-600 mb-10 leading-relaxed text-balance">
-        To give you a more meaningful result, we'll now ask a few questions about how anxiety shows up in your
-        day-to-day life.
+        {description || defaultDescription}
       </p>
 
       <button
