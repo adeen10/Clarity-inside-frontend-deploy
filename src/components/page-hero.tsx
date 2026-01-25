@@ -1,6 +1,5 @@
 import { ReactNode } from "react"
 import { cn } from "@/lib/utils"
-import { InteractiveBackground } from "./interactive-background"
 
 interface PageHeroProps {
     title: string
